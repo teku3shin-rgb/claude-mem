@@ -179,6 +179,24 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
 .dlg-ops .right { display: flex; gap: 8px; margin-left: auto; }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; }
 
+/* メール取り込み */
+#dlg-mail { width: min(720px, calc(100vw - 32px)); }
+.mail-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.mail-controls .field { min-width: 120px; }
+.mail-paste summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+.mail-paste[open] { display: grid; gap: 8px; }
+.mail-paste textarea { min-height: 140px; width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--surface-2); resize: vertical; }
+.cand { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; }
+.cand input { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent); }
+.cand .body { display: grid; gap: 3px; min-width: 0; }
+.cand .top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cand .ttl { font-weight: 700; overflow-wrap: anywhere; }
+.cand .meta, .cand .src { font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; }
+.cand .src a { color: var(--accent); }
+.cand .warn { font-size: .8rem; color: var(--warn); font-weight: 700; }
+.mail-group { display: grid; gap: 8px; }
+.mail-group h3 { margin: 0; font-size: .92rem; }
+
 /* バックアップ */
 .backup { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 20px; }
 .backup h2 { margin: 0; font-size: 1rem; }
@@ -221,6 +239,7 @@ button.stat:hover { border-color: var(--accent); }
       <p class="today num" id="today"></p>
     </div>
     <div class="actions">
+      <button class="btn" type="button" id="btn-mail" hidden>メールから取り込む</button>
       <button class="btn" type="button" data-action="new-company">＋ 企業を追加</button>
       <button class="btn primary" type="button" data-action="new-event">＋ 予定を追加</button>
     </div>
@@ -327,6 +346,44 @@ button.stat:hover { border-color: var(--accent); }
   </form>
 </dialog>
 
+<dialog id="dlg-mail" aria-labelledby="mail-title">
+  <div class="detail">
+    <div class="head">
+      <h2 id="mail-title">メールから予定を取り込む</h2>
+      <span class="sub">Gmail の就活メールを Claude が読み、日時・企業名・場所を取り出します。追加する前に内容を確認できます。</span>
+    </div>
+    <div class="mail-controls">
+      <label class="field"><span>読む期間</span>
+        <select id="mail-range">
+          <option value="3">直近3日</option>
+          <option value="7" selected>直近7日</option>
+          <option value="14">直近14日</option>
+          <option value="30">直近30日</option>
+        </select>
+      </label>
+      <div style="display:grid;gap:4px">
+        <label class="check"><input type="checkbox" id="mail-invites"> 申し込み前の説明会・イベント案内も表示</label>
+        <label class="check"><input type="checkbox" id="mail-rescan"> 前に確認したメールも読み直す</label>
+      </div>
+      <button class="btn primary" type="button" id="mail-scan">Gmail を確認</button>
+    </div>
+    <details class="mail-paste">
+      <summary>別のアカウントのメールを貼り付けて読み取る</summary>
+      <textarea id="mail-paste-text" maxlength="20000" placeholder="件名・差出人・本文をまとめて貼り付けてください"></textarea>
+      <div><button class="btn" type="button" id="mail-paste-go">貼り付けたメールを読み取る</button></div>
+    </details>
+    <p class="notice" id="mail-status" hidden></p>
+    <div id="mail-results" class="list"></div>
+    <div class="dlg-ops">
+      <span class="sub" id="mail-accounts" style="color:var(--muted);font-size:.82rem"></span>
+      <div class="right">
+        <button class="btn" type="button" data-close>閉じる</button>
+        <button class="btn primary" type="button" id="mail-add" hidden>選んだ予定を追加</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dlg-detail" aria-labelledby="detail-title">
   <div class="detail" id="detail-body"></div>
 </dialog>
@@ -374,6 +431,7 @@ button.stat:hover { border-color: var(--accent); }
 
   /* ---------- 保存先 ---------- */
   let db = null;
+  let mcp = null, sampler = null;
 
   function loadLocal() {
     try {
@@ -424,6 +482,9 @@ button.stat:hover { border-color: var(--accent); }
       } catch (e) {}
       if (state.readOnly) { notice.textContent = '閲覧のみです。予定や企業の追加・編集はできません。'; notice.hidden = false; }
       const onErr = () => { notice.textContent = 'データの読み込みが止まりました。ページを再読み込みしてください。'; notice.hidden = false; };
+      try { mcp = await window.claude.use('mcp'); } catch (e) { mcp = null; }
+      try { sampler = await window.claude.use('sample'); } catch (e) { sampler = null; }
+      document.getElementById('btn-mail').hidden = !(mcp && sampler) || state.readOnly;
       for (const col of ['companies', 'events']) {
         db.collection(col).onSnapshot(snap => {
           state[col] = new Map(snap.docs.map(d => [d.id, d.data()]));
@@ -676,6 +737,7 @@ button.stat:hover { border-color: var(--accent); }
         <dt>状況</dt><dd>${ev.done ? '完了' : '未完了'}</dd>
         ${ev.place ? `<dt>場所・URL</dt><dd>${linkify(ev.place)}</dd>` : ''}
         <dt>メモ</dt><dd>${ev.memo ? esc(ev.memo) : '<span style="color:var(--muted)">なし</span>'}</dd>
+        ${ev.source && ev.source.subject ? `<dt>元のメール</dt><dd>${isUrl(ev.source.viewUrl) ? `<a href="${esc(ev.source.viewUrl)}" target="_blank" rel="noopener">${esc(ev.source.subject)}</a>` : esc(ev.source.subject)}${ev.source.account ? `<br><span style="color:var(--muted);font-size:.82rem">${esc(ev.source.account)}</span>` : ''}</dd>` : ''}
       </dl>
       <div class="dlg-ops">
         ${ro ? '' : `<button class="btn danger" type="button" data-action="delete-event" data-id="${esc(id)}">${TRASH} 削除</button>`}
@@ -822,6 +884,7 @@ button.stat:hover { border-color: var(--accent); }
       place: $('ev-place').value.trim(),
       memo: $('ev-memo').value.trim(),
       done: $('ev-done').checked,
+      ...(prev?.source ? { source: prev.source } : {}),
       createdAt: prev?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -935,6 +998,306 @@ button.stat:hover { border-color: var(--accent); }
         if (await put('companies', t.dataset.id, { ...c, stage: t.value, updatedAt: new Date().toISOString() })) toast(`${c.name}：${t.value} に更新しました`);
       }
     }
+  });
+
+  /* ---------- メールから取り込む ---------- */
+  const MAIL_KEYWORDS = '面接 OR 面談 OR 説明会 OR 選考 OR 締切 OR 〆切 OR 締め切り OR 適性検査 OR Webテスト OR WEBテスト OR SPI OR 玉手箱 OR 内定 OR 内々定 OR インターン OR エントリーシート OR 日程 OR 予約 OR 合否 OR 結果 OR 座談会 OR セミナー';
+  const mail = { cands: [], seenKeys: [], busy: false };
+
+  function mailStatus(msg) { const el = $('mail-status'); el.textContent = msg || ''; el.hidden = !msg; }
+
+  function mcpErrorText(e) {
+    switch (e && e.code) {
+      case 'server_not_connected': return 'Gmail がつながっていません。claude.ai の 設定 → コネクタ で Gmail を追加してください。';
+      case 'needs_reauth': return 'Gmail の接続が切れています。claude.ai の 設定 → コネクタ で Gmail に再接続してください。';
+      case 'selection_required': return 'Gmail のアカウントが複数つながっています。画面に出る案内から、このページで使うアカウントを選んでください。';
+      case 'not_in_manifest': return 'このページでの Gmail の利用が許可されていません。ページの権限設定で Gmail を許可してください。';
+      case 'blocked_by_policy': case 'approval_required': return '組織の設定により、このページから Gmail を読めません。';
+      case 'server_unavailable': return 'Gmail に接続できませんでした。少し待ってからもう一度お試しください。';
+      case 'tool_error': return 'Gmail の読み取りでエラーが出ました: ' + (e.message || '');
+      default: return 'Gmail を読み取れませんでした。少し待ってからもう一度お試しください。';
+    }
+  }
+  function sampleErrorText(e) {
+    switch (e && e.code) {
+      case 'not_granted': case 'sampling_disabled': case 'not_declared': case 'capability_disabled': case 'capability_removed':
+        return 'このページで Claude にメールを読ませる許可がありません。ページの権限設定を確認してください。';
+      case 'rate_limited': return 'Claude の利用上限に達しました。しばらく待ってからもう一度お試しください。';
+      case 'session_expired': return 'claude.ai に再ログインしてください。';
+      case 'prompt_too_large': return 'メールが長すぎて読み取れませんでした。期間を短くしてお試しください。';
+      case 'refused': case 'empty_completion': case 'invalid_json': return 'メールの内容をうまく読み取れませんでした。もう一度お試しください。';
+      default: return 'メールの読み取り中にエラーが出ました。少し待ってからもう一度お試しください。';
+    }
+  }
+
+  // パスワードなどの行は Claude に渡す前に伏せる
+  const redact = t => String(t || '').split('\n').map(l => /(パスワード|ＰＷ|\bPW\b|pass\s*word|passcode|暗証)/i.test(l) ? '[秘密情報のため省略]' : l).join('\n');
+  const normCo = s => String(s || '').normalize('NFKC').replace(/株式会社|有限会社|合同会社|\(株\)|（株）|グループ|ホールディングス|\s/g, '').toLowerCase();
+
+  function findCompany(name) {
+    const n = normCo(name);
+    if (!n) return null;
+    for (const [id, c] of state.companies) {
+      const m = normCo(c.name);
+      if (m && (m === n || m.includes(n) || n.includes(m))) return id;
+    }
+    return null;
+  }
+
+  async function loadSeen() {
+    try { const snap = await db.collection('mailSeen').get(); return new Set(snap.docs.map(d => d.id)); }
+    catch (e) { return new Set(); }
+  }
+  async function markSeen(keys) {
+    const at = new Date().toISOString();
+    for (let i = 0; i < keys.length; i += 10) {
+      await Promise.all(keys.slice(i, i + 10).map(k => db.collection('mailSeen').doc(k).set({ at }).catch(() => {})));
+    }
+  }
+
+  // Gmail 側の失敗と Claude 側の失敗を見分けられるよう印を付ける
+  async function callGmail(tool, input) {
+    try { return await mcp.callTool('Gmail', tool, input); }
+    catch (e) { throw { src: 'gmail', e }; }
+  }
+
+  const today = () => { const d = new Date(); return `${ymd(d)}（${WD[d.getDay()]}）`; };
+
+  async function triage(threads, wantInvites) {
+    const list = threads.map((t, i) => {
+      const m = (t.messages || [])[0] || {};
+      return { i, from: m.sender || '', subject: m.subject || '', snippet: String(m.snippet || '').slice(0, 220) };
+    });
+    const res = await sampler.json(
+      `あなたは就職活動中の学生のメール整理係です。今日は ${today()}。\n` +
+      `次のメール一覧から、本人の就活スケジュールに関係するものを選んでください。\n` +
+      `type の付け方:\n- "confirmed": 本人が申し込んだ・選考中の企業からの連絡（説明会や面接の予約完了・日程確定・日程調整のお願い、Webテスト受検依頼、ES提出締切、選考結果、内定の連絡など）\n` +
+      `- "invite": まだ申し込んでいない説明会・イベント・選考への案内や勧誘（就活サイトの一斉配信を含む）\n- "other": 就活の予定に関係ないもの\n` +
+      `"other" は出力に含めないでください。JSON だけを返してください: {"keep":[{"i":番号,"type":"confirmed"|"invite"}]}\n\n` +
+      JSON.stringify(list),
+      { modelTier: 'quick' }
+    );
+    const keep = Array.isArray(res && res.keep) ? res.keep : [];
+    return keep.filter(k => Number.isInteger(k.i) && threads[k.i] && (k.type === 'confirmed' || (wantInvites && k.type === 'invite')))
+      .map(k => ({ thread: threads[k.i], type: k.type }));
+  }
+
+  async function extract(emails) {
+    const coNames = [...state.companies.values()].map(c => c.name).slice(0, 80);
+    const res = await sampler.json(
+      `あなたは就職活動中の学生の予定管理係です。今日は ${today()}（日本時間）。\n` +
+      `次のメールそれぞれから、カレンダーに入れるべき予定を取り出してください。\n` +
+      `ルール:\n` +
+      `- kind は "deadline"(提出・受検・返信の締切) / "seminar"(説明会・座談会・インターン) / "test"(Webテスト・適性検査) / "interview"(面接・面談) / "other"(選考結果の連絡など) のどれか\n` +
+      `- date は "YYYY-MM-DD"。年が書かれていなければ今日以降で一番近い日付にする。日付が読み取れない予定は出さない\n` +
+      `- time は "HH:MM"（24時間制・日本時間）。締切なら締切時刻。なければ ""\n` +
+      `- 候補日から選ぶよう求められていて確定していない場合は、返信の締切を kind "deadline"、title "面接日程の返信" のようにする\n` +
+      `- 選考結果の連絡は kind "other"、date はメールの受信日、title は「書類選考 通過」のように短く、stage に次の段階を入れる\n` +
+      `- stage は次のどれか、または ""：${STAGES.join(' / ')}\n` +
+      `- place はオンラインURL・会場住所・建物名など。なければ ""\n` +
+      `- memo は持ち物・服装・準備など短く。ID・パスワード・URL内のトークンは絶対に書かない\n` +
+      `- company は正式な企業名。登録済みの企業と同じ会社なら、その表記に合わせる: ${JSON.stringify(coNames)}\n` +
+      `- confidence は "high" / "medium" / "low"\n` +
+      `JSON だけを返してください: {"emails":[{"i":番号,"items":[{"company":"","kind":"","title":"","date":"","time":"","place":"","memo":"","stage":"","confidence":""}]}]}\n\n` +
+      JSON.stringify(emails),
+      { modelTier: 'default' }
+    );
+    return Array.isArray(res && res.emails) ? res.emails : [];
+  }
+
+  function cleanItem(it) {
+    if (!it || typeof it !== 'object') return null;
+    const date = String(it.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(parseDate(date))) return null;
+    const time = /^\d{2}:\d{2}$/.test(it.time || '') ? it.time : '';
+    const title = String(it.title || '').trim().slice(0, 120);
+    if (!title) return null;
+    return {
+      company: String(it.company || '').trim().slice(0, 100),
+      kind: KINDS[it.kind] ? it.kind : 'other',
+      title, date, time,
+      place: String(it.place || '').trim().slice(0, 300),
+      memo: String(it.memo || '').trim().slice(0, 1000),
+      stage: STAGES.includes(it.stage) ? it.stage : '',
+      confidence: ['high', 'medium', 'low'].includes(it.confidence) ? it.confidence : 'medium',
+    };
+  }
+
+  function isDuplicate(c) {
+    const cid = findCompany(c.company);
+    for (const ev of state.events.values()) {
+      if (ev.date !== c.date) continue;
+      if ((ev.time || '') !== c.time && ev.time && c.time) continue;
+      if (cid && ev.companyId === cid) return true;
+      if (normCo(ev.title) === normCo(c.title)) return true;
+    }
+    return false;
+  }
+
+  function renderCands() {
+    const el = $('mail-results');
+    if (!mail.cands.length) { el.innerHTML = ''; $('mail-add').hidden = true; return; }
+    const groups = [['confirmed', '自分の選考・予約の連絡'], ['invite', '申し込み前の案内']];
+    el.innerHTML = groups.map(([type, label]) => {
+      const rows = mail.cands.map((c, i) => [c, i]).filter(([c]) => c.type === type);
+      if (!rows.length) return '';
+      return `<div class="mail-group"><h3>${label}（${rows.length}件）</h3>${rows.map(([c, i]) => {
+        const k = KINDS[c.kind] || KINDS.other;
+        const cid = findCompany(c.company);
+        const stageNote = c.stage ? (cid ? `選考段階を「${esc(c.stage)}」に更新` : `新しい企業として「${esc(c.stage)}」で登録`) : (c.company && !cid ? '新しい企業として登録' : '');
+        return `<label class="cand">
+          <input type="checkbox" data-cand="${i}"${c.checked ? ' checked' : ''}>
+          <span class="body">
+            <span class="top"><span class="kind ${k.cls}">${k.label}</span><span class="num">${fmtShort(c.date)}${c.time ? ' ' + esc(c.time) : ''}</span>${countdown(c.date)}${c.confidence === 'low' ? '<span class="pill">自信なし</span>' : ''}</span>
+            <span class="ttl">${c.company ? esc(c.company) + '　' : ''}${esc(c.title)}</span>
+            ${c.place ? `<span class="meta">${esc(c.place)}</span>` : ''}
+            ${c.memo ? `<span class="meta">${esc(c.memo)}</span>` : ''}
+            ${stageNote ? `<span class="meta">${stageNote}</span>` : ''}
+            ${c.dup ? '<span class="warn">同じ日に登録済みの予定があります（重複かもしれません）</span>' : ''}
+            <span class="src">${isUrl(c.source.viewUrl) ? `<a href="${esc(c.source.viewUrl)}" target="_blank" rel="noopener">${esc(c.source.subject || '(件名なし)')}</a>` : esc(c.source.subject || '')}${c.source.account ? ' · ' + esc(c.source.account) : ''}</span>
+          </span>
+        </label>`;
+      }).join('')}</div>`;
+    }).join('');
+    $('mail-add').hidden = false;
+  }
+
+  function pushCands(results, sources) {
+    for (const r of results) {
+      const src = sources[r.i];
+      if (!src) continue;
+      for (const raw of (Array.isArray(r.items) ? r.items : [])) {
+        const it = cleanItem(raw);
+        if (!it) continue;
+        const dup = isDuplicate(it);
+        mail.cands.push({ ...it, type: src.type, source: src.source, key: src.key, dup,
+          checked: src.type === 'confirmed' && !dup && it.confidence !== 'low' && daysUntil(it.date) >= -1 });
+      }
+    }
+  }
+
+  async function scanGmail() {
+    if (mail.busy) return;
+    mail.busy = true; mail.cands = []; mail.seenKeys = []; renderCands();
+    $('mail-scan').disabled = true;
+    try {
+      const days = Number($('mail-range').value) || 7;
+      const query = `newer_than:${days}d -in:sent -in:draft -in:chats (${MAIL_KEYWORDS})`;
+      mailStatus('Gmail を検索しています…');
+      let threads = [], pageToken = '';
+      for (let page = 0; page < 2; page++) {
+        const r = await callGmail('search_threads', { query, pageSize: 40, ...(pageToken ? { pageToken } : {}) });
+        const p = r.payload || {};
+        threads.push(...(Array.isArray(p.threads) ? p.threads : []));
+        pageToken = p.nextPageToken || '';
+        if (!pageToken) break;
+      }
+      const accounts = new Set();
+      for (const t of threads) for (const m of (t.messages || [])) for (const a of (m.toRecipients || [])) if (/@/.test(a)) accounts.add(a);
+      $('mail-accounts').textContent = accounts.size ? `受信アドレス: ${[...accounts].slice(0, 3).join(', ')}` : '';
+      const seen = $('mail-rescan').checked ? new Set() : await loadSeen();
+      const keyOf = t => `${t.id}-${t.messageCount || (t.messages || []).length}`;
+      threads = threads.filter(t => t && t.id && !seen.has(keyOf(t)));
+      if (!threads.length) { mailStatus(`直近${days}日に新しい就活メールはありませんでした。`); return; }
+
+      mailStatus(`${threads.length}件のメールから、就活の予定に関係するものを選んでいます…`);
+      const kept = await triage(threads, $('mail-invites').checked);
+      const keptIds = new Set(kept.map(k => k.thread.id));
+      // 案内も表示しているときだけ、選ばれなかったメール（予定に無関係）を次回から読まない。
+      // 案内を表示していないときは、案内メールと無関係なメールを見分けられないので残す。
+      const skipKeys = [];
+      if ($('mail-invites').checked) for (const t of threads) if (!keptIds.has(t.id)) skipKeys.push(keyOf(t));
+      if (!kept.length) { await markSeen(skipKeys); mailStatus('予定として取り込めそうなメールはありませんでした。'); return; }
+
+      const targets = kept.slice(0, 20);
+      const sources = [], emails = [];
+      for (let i = 0; i < targets.length; i++) {
+        mailStatus(`メールを読んでいます（${i + 1} / ${targets.length}）…`);
+        const { thread, type } = targets[i];
+        let msgs = [];
+        try {
+          const r = await callGmail('get_thread', { threadId: thread.id, messageFormat: 'PLAIN_TEXT' });
+          msgs = (r.payload && r.payload.messages) || [];
+        } catch (err) { if (!(err && err.src === 'gmail' && err.e && err.e.code === 'tool_error')) throw err; }
+        const m = msgs[msgs.length - 1] || (thread.messages || [])[0] || {};
+        sources.push({ type, key: keyOf(thread), source: { subject: String(m.subject || '').slice(0, 200), viewUrl: isUrl(m.viewUrl || thread.viewUrl) ? (m.viewUrl || thread.viewUrl) : '', account: (m.toRecipients || [])[0] || '' } });
+        emails.push({ i: sources.length - 1, from: m.sender || '', subject: m.subject || '', received: m.date || '', body: redact(m.plaintext_body || m.snippet || '').slice(0, 3500) });
+      }
+      for (let i = 0; i < emails.length; i += 4) {
+        mailStatus(`Claude が予定を取り出しています（${Math.min(i + 4, emails.length)} / ${emails.length}）…`);
+        pushCands(await extract(emails.slice(i, i + 4)), sources);
+        renderCands();
+      }
+      mail.seenKeys = [...new Set([...sources.map(s => s.key), ...skipKeys])];
+      mailStatus(mail.cands.length
+        ? `${mail.cands.length}件の予定が見つかりました。追加するものにチェックを入れて「選んだ予定を追加」を押してください。`
+        : 'メールは読みましたが、日付のある予定は見つかりませんでした。');
+      if (!mail.cands.length) await markSeen(mail.seenKeys);
+    } catch (e) {
+      mailStatus(e && e.src === 'gmail' ? mcpErrorText(e.e) : sampleErrorText(e));
+    } finally {
+      mail.busy = false; $('mail-scan').disabled = false;
+    }
+  }
+
+  async function readPasted() {
+    const text = $('mail-paste-text').value.trim();
+    if (!text || mail.busy) return;
+    mail.busy = true; mail.cands = []; mail.seenKeys = []; renderCands();
+    try {
+      mailStatus('Claude が予定を取り出しています…');
+      const subject = (text.match(/^(?:件名|Subject)\s*[:：]\s*(.+)$/mi) || [])[1] || '貼り付けたメール';
+      const sources = [{ type: 'confirmed', key: '', source: { subject: subject.slice(0, 200), viewUrl: '', account: '' } }];
+      pushCands(await extract([{ i: 0, body: redact(text).slice(0, 12000) }]), sources);
+      renderCands();
+      mailStatus(mail.cands.length ? `${mail.cands.length}件の予定が見つかりました。` : '日付のある予定は見つかりませんでした。');
+    } catch (e) { mailStatus(sampleErrorText(e)); }
+    finally { mail.busy = false; }
+  }
+
+  async function addCands() {
+    const chosen = mail.cands.filter(c => c.checked);
+    if (!chosen.length) { mailStatus('追加する予定にチェックを入れてください。'); return; }
+    $('mail-add').disabled = true;
+    const created = new Map();
+    let nEv = 0, nCo = 0;
+    try {
+      for (const c of chosen) {
+        let cid = '';
+        if (c.company) {
+          cid = findCompany(c.company) || created.get(normCo(c.company)) || '';
+          if (!cid) {
+            cid = newId('companies');
+            const now = new Date().toISOString();
+            if (!(await put('companies', cid, { name: c.company, industry: '', priority: 2, stage: c.stage || 'エントリー済', url: '', memo: '', createdAt: now, updatedAt: now }))) return;
+            created.set(normCo(c.company), cid); nCo++;
+          } else if (c.stage) {
+            const co = state.companies.get(cid);
+            const later = c.stage === '辞退・見送り' || STAGES.indexOf(c.stage) > STAGES.indexOf(co && co.stage);
+            if (co && later) await put('companies', cid, { ...co, stage: c.stage, updatedAt: new Date().toISOString() });
+          }
+        }
+        const now = new Date().toISOString();
+        if (await put('events', newId('events'), {
+          kind: c.kind, companyId: cid, title: c.title, date: c.date, time: c.time, place: c.place, memo: c.memo,
+          done: c.kind === 'other' && daysUntil(c.date) <= 0, source: c.source, createdAt: now, updatedAt: now,
+        })) nEv++;
+      }
+      await markSeen(mail.seenKeys.filter(Boolean));
+      mail.cands = []; renderCands();
+      mailStatus('');
+      $('dlg-mail').close();
+      toast(`予定${nEv}件を追加しました${nCo ? `（新しい企業 ${nCo}社）` : ''}`);
+    } finally { $('mail-add').disabled = false; }
+  }
+
+  $('btn-mail').addEventListener('click', () => { mailStatus(''); renderCands(); $('dlg-mail').showModal(); });
+  $('mail-scan').addEventListener('click', scanGmail);
+  $('mail-paste-go').addEventListener('click', readPasted);
+  $('mail-add').addEventListener('click', addCands);
+  $('mail-results').addEventListener('change', e => {
+    const i = e.target.dataset && e.target.dataset.cand;
+    if (i !== undefined && mail.cands[i]) mail.cands[i].checked = e.target.checked;
   });
 
   /* ---------- バックアップ ---------- */
