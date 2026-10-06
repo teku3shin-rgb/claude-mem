@@ -197,6 +197,20 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
 .mail-group { display: grid; gap: 8px; }
 .mail-group h3 { margin: 0; font-size: .92rem; }
 
+/* 企業情報 */
+.info { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.info-summary { margin: 0; line-height: 1.75; }
+.info ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.info details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface-2); }
+.info details[open] { display: grid; gap: 8px; }
+.info summary { cursor: pointer; font-weight: 700; font-size: .9rem; }
+.info .note { font-size: .78rem; color: var(--muted); margin: 0; }
+.info .sources a { color: var(--accent); font-size: .82rem; overflow-wrap: anywhere; }
+.links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.links > span { font-size: .8rem; color: var(--muted); }
+.links a { font-size: .8rem; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--accent); text-decoration: none; background: var(--surface); }
+.links a:hover { border-color: var(--accent); }
+
 /* バックアップ */
 .backup { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 20px; }
 .backup h2 { margin: 0; font-size: 1rem; }
@@ -765,6 +779,7 @@ button.stat:hover { border-color: var(--accent); }
         <dt>メモ</dt><dd>${c.memo ? esc(c.memo) : '<span style="color:var(--muted)">なし</span>'}</dd>
         ${created && !isNaN(created) ? `<dt>登録日</dt><dd class="num">${created.getFullYear()}/${created.getMonth() + 1}/${created.getDate()}</dd>` : ''}
       </dl>
+      ${companyInfoHtml(id, c)}
       <div class="sec">
         <div class="toolbar"><h3>この企業の予定 <span class="pill num">${evs.length}件</span></h3>
           ${ro ? '' : `<button class="btn small" type="button" data-action="new-event" data-company="${esc(id)}">＋ 予定を追加</button>`}</div>
@@ -777,6 +792,87 @@ button.stat:hover { border-color: var(--accent); }
           <button class="btn" type="button" data-action="close-detail">閉じる</button>
         </div>
       </div>`;
+  }
+
+  /* 企業情報 */
+  const researching = new Set();
+  const strList = v => (Array.isArray(v) ? v : []).map(x => String(x || '').trim()).filter(Boolean);
+
+  function companyInfoHtml(id, c) {
+    const info = c.info && typeof c.info === 'object' ? c.info : null;
+    const q = encodeURIComponent(c.name);
+    const links = [
+      ['採用ページ', `https://www.google.com/search?q=${q}+%E6%96%B0%E5%8D%92%E6%8E%A1%E7%94%A8`],
+      ['ニュース', `https://news.google.com/search?q=${q}&hl=ja&gl=JP&ceid=JP:ja`],
+      ['口コミ（OpenWork）', `https://www.google.com/search?q=site%3Aopenwork.jp+${q}`],
+      ['選考体験記（ワンキャリア）', `https://www.google.com/search?q=site%3Aonecareer.jp+${q}`],
+      ['選考体験記（就活会議）', `https://www.google.com/search?q=site%3Asyukatsu-kaigi.jp+${q}`],
+    ];
+    const busy = researching.has(id);
+    const canResearch = sampler && !state.readOnly;
+    const btn = canResearch
+      ? `<button class="btn small" type="button" data-action="research-company" data-id="${esc(id)}"${busy ? ' disabled' : ''}>${busy ? '調べています…' : info ? 'Claude で更新' : 'Claude に調べてもらう'}</button>` : '';
+    const sec = (title, items) => items.length ? `<details><summary>${title}</summary><ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : '';
+    let body = '';
+    if (info) {
+      const facts = [['業界', info.industry], ['本社', info.hq], ['設立', info.founded], ['従業員数', info.employees], ['売上高', info.revenue], ['上場', info.listing]]
+        .filter(([, v]) => v && String(v).trim());
+      const srcs = (Array.isArray(info.sources) ? info.sources : []).filter(x => x && isUrl(x.url));
+      const when = info.updatedAt ? new Date(info.updatedAt) : null;
+      const whenTxt = when && !isNaN(when) ? `${when.getFullYear()}/${when.getMonth() + 1}/${when.getDate()}` : '';
+      body = `
+        ${info.summary ? `<p class="info-summary">${esc(info.summary)}</p>` : ''}
+        ${facts.length ? `<dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+        ${sec('事業内容', strList(info.business))}
+        ${sec('強み・特徴', strList(info.strengths))}
+        ${sec('社風・働き方', strList(info.culture))}
+        ${sec('選考の流れ', strList(info.selection))}
+        ${sec('面接対策のポイント', strList(info.interview))}
+        ${sec('最近の動き', strList(info.news))}
+        ${srcs.length ? `<details class="sources"><summary>出典（${srcs.length}件）</summary><ul>${srcs.map(x => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title || x.url)}</a></li>`).join('')}</ul></details>` : ''}
+        <p class="note">${info.method === 'web'
+          ? `${whenTxt} 時点でWebから集めた情報です。選考の流れは年度や職種で変わるので、最新の内容は採用ページで確認してください。`
+          : `Claude の知識をもとにまとめた情報です（${whenTxt} 作成）。古い・不正確な部分がありえるので、採用ページやニュースで確認してください。`}</p>`;
+    } else {
+      body = `<p class="note">まだ企業情報がありません。${canResearch ? '「Claude に調べてもらう」で概要・強み・選考の流れなどをまとめます。' : '下のリンクから調べられます。'}</p>`;
+    }
+    return `<div class="info">
+      <div class="toolbar"><h3 style="margin:0;font-size:.95rem">企業情報</h3>${btn}</div>
+      ${body}
+      <div class="links"><span>ネットで調べる:</span>${links.map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).join('')}</div>
+    </div>`;
+  }
+
+  async function researchCompany(id) {
+    const c = state.companies.get(id);
+    if (!c || !sampler || researching.has(id)) return;
+    researching.add(id); refreshDetail();
+    try {
+      const res = await sampler.json(
+        `就職活動中の学生のために、日本の企業「${c.name}」${c.industry ? `（${c.industry}）` : ''}の企業研究メモを作ってください。今日は ${todayStr()}。\n` +
+        `あなたの知識の範囲で書き、自信のない数値や事実は書かずに空にしてください。推測で数字を作らないこと。\n` +
+        `JSON だけを返してください:\n` +
+        `{"summary":"2〜3文の概要","industry":"業界","hq":"本社所在地","founded":"設立年","employees":"従業員数（時点も）","revenue":"売上高（時点も）","listing":"上場市場・証券コード、未上場なら未上場",` +
+        `"business":["主な事業 3〜5個"],"strengths":["強み・特徴 3〜5個"],"culture":["社風・働き方 2〜4個"],"selection":["新卒選考の一般的な流れ（例: ES・Webテスト → GD → 面接2〜3回）"],` +
+        `"interview":["面接で聞かれやすいこと・対策ポイント 3〜5個"],"news":[]}`,
+        { modelTier: 'default' }
+      );
+      const str = v => String(v || '').trim().slice(0, 300);
+      const list = v => strList(v).slice(0, 8).map(x => x.slice(0, 300));
+      const info = {
+        method: 'claude', updatedAt: new Date().toISOString(),
+        summary: String(res && res.summary || '').trim().slice(0, 800),
+        industry: str(res.industry), hq: str(res.hq), founded: str(res.founded), employees: str(res.employees), revenue: str(res.revenue), listing: str(res.listing),
+        business: list(res.business), strengths: list(res.strengths), culture: list(res.culture), selection: list(res.selection), interview: list(res.interview), news: list(res.news),
+        sources: [],
+      };
+      const cur = state.companies.get(id) || c;
+      if (await put('companies', id, { ...cur, info, industry: cur.industry || info.industry, updatedAt: new Date().toISOString() })) toast(`${c.name} の企業情報をまとめました`);
+    } catch (e) {
+      toast(sampleErrorText(e));
+    } finally {
+      researching.delete(id); refreshDetail();
+    }
   }
 
   function refreshDetail() {
@@ -907,6 +1003,7 @@ button.stat:hover { border-color: var(--accent); }
       stage: $('co-stage').value,
       url: $('co-url').value.trim(),
       memo: $('co-memo').value.trim(),
+      ...(prev?.info ? { info: prev.info } : {}),
       createdAt: prev?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -944,6 +1041,7 @@ button.stat:hover { border-color: var(--accent); }
     if (a === 'view-event') openDetail('event', id);
     else if (a === 'view-company') openDetail('company', id);
     else if (a === 'close-detail') closeDetail();
+    else if (a === 'research-company') researchCompany(id);
     else if (a === 'new-event') leaveDetailFor(() => openEvent(null, { date: t.dataset.date, companyId: t.dataset.company }));
     else if (a === 'new-company') openCompany(null);
     else if (a === 'edit-event') leaveDetailFor(() => openEvent(id));
