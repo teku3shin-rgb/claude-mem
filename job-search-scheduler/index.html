@@ -179,7 +179,30 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
 .dlg-ops .right { display: flex; gap: 8px; margin-left: auto; }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; }
 
-.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: .9rem; max-width: calc(100vw - 32px); z-index: 10; }
+/* 詳細表示・ゴミ箱 */
+.item[data-action], .card[data-action] { cursor: pointer; }
+.item[data-action]:hover, .card[data-action]:hover { border-color: var(--accent); }
+button.stat { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.stat:hover { border-color: var(--accent); }
+.icon-btn { border: 1px solid transparent; background: none; border-radius: 6px; padding: 4px 6px; color: var(--muted); cursor: pointer; display: inline-grid; place-items: center; }
+.btn svg { vertical-align: -3px; }
+.icon-btn:hover { color: var(--danger); border-color: var(--line); background: var(--danger-soft); }
+.detail { display: grid; gap: 14px; padding: 20px; }
+.detail .head { display: grid; gap: 4px; }
+.detail .head .sub { color: var(--muted); font-size: .88rem; }
+.detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; margin: 0; }
+.detail dt { color: var(--muted); font-size: .82rem; padding-top: 2px; white-space: nowrap; }
+.detail dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.detail dd a { color: var(--accent); }
+.detail .sec { display: grid; gap: 8px; }
+.detail .sec h3 { margin: 0; font-size: .95rem; }
+.detail .item { grid-template-columns: auto minmax(0, 1fr); }
+.detail .item .when { grid-column: 2; display: flex; gap: 8px; align-items: center; }
+.detail .item .main, .detail .item .ops { grid-column: 2; }
+.detail .item .ops { justify-content: flex-start; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: .9rem; max-width: calc(100vw - 32px); z-index: 10; display: flex; align-items: center; gap: 14px; }
+.toast button { background: none; border: 0; color: var(--bg); font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; white-space: nowrap; }
 @media (prefers-reduced-motion: no-preference) {
   .toast { transition: opacity .2s; }
 }
@@ -289,7 +312,11 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
   </form>
 </dialog>
 
-<div class="toast" id="toast" hidden></div>
+<dialog id="dlg-detail" aria-labelledby="detail-title">
+  <div class="detail" id="detail-body"></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden><span id="toast-msg"></span><button type="button" id="toast-undo" hidden>元に戻す</button></div>
 
 <script>
 (() => {
@@ -305,6 +332,7 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
   const PRIO = { 3: '志望度 高', 2: '志望度 中', 1: '志望度 低' };
   const WD = ['日', '月', '火', '水', '木', '金', '土'];
   const LOCAL_KEY = 'job-schedule-v1';
+  const TRASH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>';
 
   const pad = n => String(n).padStart(2, '0');
   const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -432,7 +460,7 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
     const k = KINDS[ev.kind] || KINDS.other;
     const name = coName(ev.companyId);
     const dis = state.readOnly ? ' disabled' : '';
-    return `<article class="item${ev.done ? ' done' : ''}">
+    return `<article class="item${ev.done ? ' done' : ''}" data-action="view-event" data-id="${esc(id)}" tabindex="0" aria-label="${esc((name ? name + ' ' : '') + ev.title)} の詳細を見る">
       <input type="checkbox" aria-label="完了にする" data-action="toggle-done" data-id="${esc(id)}"${ev.done ? ' checked' : ''}${dis}>
       <div class="when"><span class="kind ${k.cls}">${k.label}</span>
         <span class="time num">${opts.showDate ? fmtShort(ev.date) + ' ' : ''}${ev.time ? esc(ev.time) : (ev.kind === 'deadline' ? '終日' : '時間未定')}</span></div>
@@ -444,8 +472,8 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
       </div>
       <div class="ops">
         ${opts.showCountdown ? countdown(ev.date) : ''}
-        <a class="btn small ghost" href="${esc(gcalUrl(ev))}" target="_blank" rel="noopener">Googleカレンダーへ</a>
-        ${state.readOnly ? '' : `<button class="btn small" type="button" data-action="edit-event" data-id="${esc(id)}">編集</button>`}
+        ${state.readOnly ? '' : `<button class="btn small" type="button" data-action="edit-event" data-id="${esc(id)}">編集</button>
+        <button class="icon-btn" type="button" data-action="delete-event" data-id="${esc(id)}" aria-label="この予定を削除" title="削除">${TRASH}</button>`}
       </div>
     </article>`;
   }
@@ -467,16 +495,16 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
     const offers = cos.filter(c => c.stage === '内定').length;
     const nextDl = deadlines[0];
     document.getElementById('stats').innerHTML = `
-      <div class="stat"><span class="label">今日の予定</span><span class="value num">${todays.length}<small>件</small></span>
-        <span class="hint">${todays[0] ? esc((coName(todays[0].companyId) + ' ' + todays[0].title).trim()) : 'なし'}</span></div>
-      <div class="stat${deadlines.length ? ' alert' : ''}"><span class="label">7日以内の締切</span><span class="value num">${deadlines.length}<small>件</small></span>
-        <span class="hint">${nextDl ? esc(fmtShort(nextDl.date) + ' ' + (coName(nextDl.companyId) || nextDl.title)) : 'なし'}</span></div>
-      <div class="stat${overdue.length ? ' alert' : ''}"><span class="label">期限切れ・未完了</span><span class="value num">${overdue.length}<small>件</small></span>
-        <span class="hint">${overdue.length ? '完了チェックか日程の見直しを' : 'なし'}</span></div>
-      <div class="stat"><span class="label">選考中の企業</span><span class="value num">${active}<small>社</small></span>
-        <span class="hint">登録 ${cos.length}社</span></div>
-      <div class="stat${offers ? ' good' : ''}"><span class="label">内定</span><span class="value num">${offers}<small>社</small></span>
-        <span class="hint">${offers ? esc(cos.filter(c => c.stage === '内定').map(c => c.name).join('・')) : ' '}</span></div>`;
+      <button type="button" class="stat" data-action="stat" data-go="today"><span class="label">今日の予定</span><span class="value num">${todays.length}<small>件</small></span>
+        <span class="hint">${todays[0] ? esc((coName(todays[0].companyId) + ' ' + todays[0].title).trim()) : 'なし'}</span></button>
+      <button type="button" class="stat${deadlines.length ? ' alert' : ''}" data-action="stat" data-go="upcoming"><span class="label">7日以内の締切</span><span class="value num">${deadlines.length}<small>件</small></span>
+        <span class="hint">${nextDl ? esc(fmtShort(nextDl.date) + ' ' + (coName(nextDl.companyId) || nextDl.title)) : 'なし'}</span></button>
+      <button type="button" class="stat${overdue.length ? ' alert' : ''}" data-action="stat" data-go="upcoming"><span class="label">期限切れ・未完了</span><span class="value num">${overdue.length}<small>件</small></span>
+        <span class="hint">${overdue.length ? '完了チェックか日程の見直しを' : 'なし'}</span></button>
+      <button type="button" class="stat" data-action="stat" data-go="companies"><span class="label">選考中の企業</span><span class="value num">${active}<small>社</small></span>
+        <span class="hint">登録 ${cos.length}社</span></button>
+      <button type="button" class="stat${offers ? ' good' : ''}" data-action="stat" data-go="offer"><span class="label">内定</span><span class="value num">${offers}<small>社</small></span>
+        <span class="hint">${offers ? esc(cos.filter(c => c.stage === '内定').map(c => c.name).join('・')) : ' '}</span></button>`;
   }
 
   function renderUpcoming() {
@@ -572,7 +600,7 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
         const nx = nextEventFor(id);
         const nxHtml = nx ? `<div class="next"><span class="kind ${(KINDS[nx[1].kind] || KINDS.other).cls}">${(KINDS[nx[1].kind] || KINDS.other).label}</span> <span class="num">${fmtShort(nx[1].date)}${nx[1].time ? ' ' + esc(nx[1].time) : ''}</span> ${esc(nx[1].title)} ${countdown(nx[1].date)}</div>`
           : '<div class="next none">次の予定は未登録</div>';
-        return `<article class="card">
+        return `<article class="card" data-action="view-company" data-id="${esc(id)}" tabindex="0" aria-label="${esc(c.name)} の詳細を見る">
           <div class="row"><span class="name">${esc(c.name)}</span><span class="prio prio-${c.priority || 2}">${PRIO[c.priority || 2]}</span></div>
           ${c.industry ? `<span class="ind">${esc(c.industry)}</span>` : ''}
           ${nxHtml}
@@ -581,7 +609,8 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
           <div class="ops">
             <select aria-label="選考段階" data-action="set-stage" data-id="${esc(id)}"${state.readOnly ? ' disabled' : ''}>${STAGES.map(st => `<option${st === c.stage ? ' selected' : ''}>${st}</option>`).join('')}</select>
             ${state.readOnly ? '' : `<button class="btn small" type="button" data-action="new-event" data-company="${esc(id)}">予定を追加</button>
-            <button class="btn small ghost" type="button" data-action="edit-company" data-id="${esc(id)}">編集</button>`}
+            <button class="btn small ghost" type="button" data-action="edit-company" data-id="${esc(id)}">編集</button>
+            <button class="icon-btn" type="button" data-action="delete-company" data-id="${esc(id)}" aria-label="この企業を削除" title="削除" style="margin-left:auto">${TRASH}</button>`}
           </div>
         </article>`;
       }).join('')}</div></div>`;
@@ -599,18 +628,131 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
     if (state.tab === 'upcoming') renderUpcoming();
     else if (state.tab === 'calendar') renderCalendar();
     else renderCompanies();
+    refreshDetail();
   }
 
   /* ---------- ダイアログ ---------- */
   const $ = id => document.getElementById(id);
   let editingEvent = null, editingCompany = null;
+  let detailView = null;   // 開いている詳細 {type: 'event' | 'company', id}
+  let returnTo = null;     // 編集を閉じたら戻る詳細
 
   $('ev-kind').innerHTML = Object.entries(KINDS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
   $('co-stage').innerHTML = STAGES.map(s => `<option>${s}</option>`).join('');
 
-  function armDelete(btn) {
-    btn.classList.remove('armed'); btn.dataset.armed = '';
-    btn.textContent = '削除';
+  /* 詳細表示 */
+  function eventDetailHtml(id, ev) {
+    const k = KINDS[ev.kind] || KINDS.other;
+    const f = fmtDay(ev.date);
+    const ro = state.readOnly;
+    return `<div class="head">
+        <div><span class="kind ${k.cls}">${k.label}</span></div>
+        <h2 id="detail-title">${esc(ev.title)}</h2>
+        ${ev.companyId && state.companies.has(ev.companyId)
+          ? `<span class="sub"><button class="btn small ghost" type="button" data-action="view-company" data-id="${esc(ev.companyId)}">${esc(coName(ev.companyId))} の詳細 ›</button></span>` : ''}
+      </div>
+      <dl>
+        <dt>日時</dt><dd class="num">${f.md}（${f.wd}） ${ev.time ? esc(ev.time) : (ev.kind === 'deadline' ? '終日' : '時間未定')} ${countdown(ev.date)}</dd>
+        <dt>状況</dt><dd>${ev.done ? '完了' : '未完了'}</dd>
+        ${ev.place ? `<dt>場所・URL</dt><dd>${linkify(ev.place)}</dd>` : ''}
+        <dt>メモ</dt><dd>${ev.memo ? esc(ev.memo) : '<span style="color:var(--muted)">なし</span>'}</dd>
+      </dl>
+      <div class="dlg-ops">
+        ${ro ? '' : `<button class="btn danger" type="button" data-action="delete-event" data-id="${esc(id)}">${TRASH} 削除</button>`}
+        <div class="right" style="flex-wrap:wrap">
+          <a class="btn" href="${esc(gcalUrl(ev))}" target="_blank" rel="noopener">Googleカレンダーへ</a>
+          ${ro ? '' : `<button class="btn" type="button" data-action="detail-toggle-done" data-id="${esc(id)}">${ev.done ? '未完了に戻す' : '完了にする'}</button>
+          <button class="btn primary" type="button" data-action="edit-event" data-id="${esc(id)}">編集</button>`}
+          <button class="btn" type="button" data-action="close-detail">閉じる</button>
+        </div>
+      </div>`;
+  }
+
+  function companyDetailHtml(id, c) {
+    const ro = state.readOnly;
+    const evs = [...state.events.entries()].filter(([, e]) => e.companyId === id).sort(evSort);
+    const created = c.createdAt ? new Date(c.createdAt) : null;
+    return `<div class="head">
+        <div><span class="prio prio-${c.priority || 2}">${PRIO[c.priority || 2]}</span></div>
+        <h2 id="detail-title">${esc(c.name)}</h2>
+        ${c.industry ? `<span class="sub">${esc(c.industry)}</span>` : ''}
+      </div>
+      <dl>
+        <dt>選考段階</dt><dd><select aria-label="選考段階" data-action="set-stage" data-id="${esc(id)}"${ro ? ' disabled' : ''} class="btn small">${STAGES.map(st => `<option${st === c.stage ? ' selected' : ''}>${st}</option>`).join('')}</select></dd>
+        <dt>採用ページ</dt><dd>${isUrl(c.url) ? linkify(c.url) : '<span style="color:var(--muted)">未登録</span>'}</dd>
+        <dt>メモ</dt><dd>${c.memo ? esc(c.memo) : '<span style="color:var(--muted)">なし</span>'}</dd>
+        ${created && !isNaN(created) ? `<dt>登録日</dt><dd class="num">${created.getFullYear()}/${created.getMonth() + 1}/${created.getDate()}</dd>` : ''}
+      </dl>
+      <div class="sec">
+        <div class="toolbar"><h3>この企業の予定 <span class="pill num">${evs.length}件</span></h3>
+          ${ro ? '' : `<button class="btn small" type="button" data-action="new-event" data-company="${esc(id)}">＋ 予定を追加</button>`}</div>
+        ${evs.length ? evs.map(([eid, e]) => itemHtml(eid, e, { showDate: true, showCountdown: !e.done })).join('') : '<p class="notice">まだ予定がありません。</p>'}
+      </div>
+      <div class="dlg-ops">
+        ${ro ? '' : `<button class="btn danger" type="button" data-action="delete-company" data-id="${esc(id)}">${TRASH} 削除</button>`}
+        <div class="right">
+          ${ro ? '' : `<button class="btn primary" type="button" data-action="edit-company" data-id="${esc(id)}">編集</button>`}
+          <button class="btn" type="button" data-action="close-detail">閉じる</button>
+        </div>
+      </div>`;
+  }
+
+  function refreshDetail() {
+    if (!detailView || !$('dlg-detail').open) return;
+    const map = detailView.type === 'event' ? state.events : state.companies;
+    const data = map.get(detailView.id);
+    if (!data) { closeDetail(); return; }
+    $('detail-body').innerHTML = detailView.type === 'event' ? eventDetailHtml(detailView.id, data) : companyDetailHtml(detailView.id, data);
+  }
+
+  function openDetail(type, id) {
+    if (!(type === 'event' ? state.events : state.companies).has(id)) return;
+    detailView = { type, id };
+    if (!$('dlg-detail').open) $('dlg-detail').showModal();
+    refreshDetail();
+    $('dlg-detail').scrollTop = 0;
+  }
+
+  function closeDetail() {
+    detailView = null;
+    if ($('dlg-detail').open) $('dlg-detail').close();
+  }
+  $('dlg-detail').addEventListener('close', () => { detailView = null; });
+
+  // 詳細から編集を開いたときは、編集を閉じたあと詳細に戻る
+  function leaveDetailFor(fn) {
+    returnTo = detailView ? { ...detailView } : null;
+    closeDetail();
+    fn();
+  }
+  for (const d of ['dlg-event', 'dlg-company']) {
+    $(d).addEventListener('close', () => {
+      const r = returnTo; returnTo = null;
+      if (r) openDetail(r.type, r.id);
+    });
+  }
+
+  /* 削除（元に戻せる） */
+  async function deleteEvent(id) {
+    const data = state.events.get(id);
+    if (!data) return;
+    if (await remove('events', id)) {
+      toast('予定を削除しました', async () => { if (await put('events', id, data)) toast('元に戻しました'); });
+    }
+  }
+
+  async function deleteCompany(id) {
+    const c = state.companies.get(id);
+    if (!c) return;
+    const related = [...state.events.entries()].filter(([, e]) => e.companyId === id);
+    for (const [eid] of related) await remove('events', eid);
+    if (await remove('companies', id)) {
+      toast(related.length ? `${c.name} と予定${related.length}件を削除しました` : `${c.name} を削除しました`, async () => {
+        if (!(await put('companies', id, c))) return;
+        for (const [eid, e] of related) await put('events', eid, e);
+        toast('元に戻しました');
+      });
+    }
   }
 
   function openEvent(id, preset = {}) {
@@ -628,7 +770,6 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
     $('ev-memo').value = ev?.memo || '';
     $('ev-done').checked = !!ev?.done;
     $('ev-delete').hidden = !id;
-    armDelete($('ev-delete'));
     $('dlg-event').showModal();
     $('ev-title').focus();
   }
@@ -644,7 +785,6 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
     $('co-url').value = c?.url || '';
     $('co-memo').value = c?.memo || '';
     $('co-delete').hidden = !id;
-    armDelete($('co-delete'));
     $('dlg-company').showModal();
     $('co-name').focus();
   }
@@ -692,31 +832,23 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
     if (await put('companies', id, data)) toast(editingCompany ? '企業情報を更新しました' : `${data.name} を追加しました`);
   });
 
-  $('ev-delete').addEventListener('click', async e => {
-    const btn = e.currentTarget;
-    if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.classList.add('armed'); btn.textContent = 'もう一度押すと削除'; return; }
+  $('ev-delete').addEventListener('click', () => {
+    if (returnTo && returnTo.type === 'event') returnTo = null;
     $('dlg-event').close();
-    if (await remove('events', editingEvent)) toast('予定を削除しました');
+    deleteEvent(editingEvent);
   });
 
-  $('co-delete').addEventListener('click', async e => {
-    const btn = e.currentTarget;
-    const related = [...state.events.entries()].filter(([, ev]) => ev.companyId === editingCompany);
-    if (!btn.dataset.armed) {
-      btn.dataset.armed = '1'; btn.classList.add('armed');
-      btn.textContent = related.length ? `関連する予定${related.length}件ごと削除` : 'もう一度押すと削除';
-      return;
-    }
+  $('co-delete').addEventListener('click', () => {
+    returnTo = null;
     $('dlg-company').close();
-    const cid = editingCompany;
-    for (const [eid] of related) await remove('events', eid);
-    if (await remove('companies', cid)) toast('企業を削除しました');
+    deleteCompany(editingCompany);
   });
 
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
   /* ---------- 操作 ---------- */
   document.addEventListener('click', async e => {
+    if (e.target.closest('a')) return;
     const t = e.target.closest('[data-action],[data-tab]');
     if (!t) return;
     if (t.dataset.tab) {
@@ -725,10 +857,31 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
       render(); return;
     }
     const a = t.dataset.action;
-    if (a === 'new-event') openEvent(null, { date: t.dataset.date, companyId: t.dataset.company });
+    const id = t.dataset.id;
+    if (a === 'view-event') openDetail('event', id);
+    else if (a === 'view-company') openDetail('company', id);
+    else if (a === 'close-detail') closeDetail();
+    else if (a === 'new-event') leaveDetailFor(() => openEvent(null, { date: t.dataset.date, companyId: t.dataset.company }));
     else if (a === 'new-company') openCompany(null);
-    else if (a === 'edit-event') openEvent(t.dataset.id);
-    else if (a === 'edit-company') openCompany(t.dataset.id);
+    else if (a === 'edit-event') leaveDetailFor(() => openEvent(id));
+    else if (a === 'edit-company') leaveDetailFor(() => openCompany(id));
+    else if (a === 'delete-event') {
+      if (detailView && detailView.type === 'event' && detailView.id === id) closeDetail();
+      deleteEvent(id);
+    } else if (a === 'delete-company') {
+      if (detailView) closeDetail();
+      deleteCompany(id);
+    } else if (a === 'detail-toggle-done') {
+      const ev = state.events.get(id);
+      if (ev) await put('events', id, { ...ev, done: !ev.done, updatedAt: new Date().toISOString() });
+    } else if (a === 'stat') {
+      const go = t.dataset.go;
+      state.tab = go === 'companies' || go === 'offer' ? 'companies' : 'upcoming';
+      state.stageFilter = go === 'offer' ? '内定' : null;
+      try { localStorage.setItem('job-schedule-tab', state.tab); } catch (err) {}
+      render();
+      $('tab-' + state.tab).scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
     else if (a === 'pick-date') { state.selDate = t.dataset.date; render(); }
     else if (a === 'month') {
       const d = Number(t.dataset.delta);
@@ -738,6 +891,14 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
     } else if (a === 'stage-filter') {
       state.stageFilter = t.dataset.stage && state.stageFilter !== t.dataset.stage ? t.dataset.stage : null;
       render();
+    }
+  });
+
+  // 行やカードはキーボードの Enter / Space でも詳細を開ける
+  document.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-action="view-event"],[data-action="view-company"]')) {
+      e.preventDefault();
+      e.target.click();
     }
   });
 
@@ -757,11 +918,15 @@ dialog h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
   });
 
   let toastTimer = null;
-  function toast(msg) {
+  function toast(msg, undo) {
     const el = $('toast');
-    el.textContent = msg; el.hidden = false;
+    const btn = $('toast-undo');
+    $('toast-msg').textContent = msg;
+    btn.hidden = !undo;
+    btn.onclick = undo ? () => { el.hidden = true; clearTimeout(toastTimer); undo(); } : null;
+    el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
+    toastTimer = setTimeout(() => { el.hidden = true; }, undo ? 6000 : 2600);
   }
 
   const td = new Date();
