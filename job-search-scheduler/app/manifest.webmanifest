@@ -1,0 +1,17 @@
+{
+  "name": "就活スケジュール帳",
+  "short_name": "就活手帳",
+  "description": "ES締切・説明会・面接の予定と、企業ごとの選考状況をまとめて管理する就活用スケジュール帳",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f4f7",
+  "theme_color": "#1f3c88",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

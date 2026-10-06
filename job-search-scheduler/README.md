@@ -13,4 +13,24 @@ ES締切・説明会・Webテスト・面接の予定と、企業ごとの選考
 ## データの保存先
 
 - claude.ai の Artifact として開いた場合: Artifact のデータベース（端末をまたいで同期）
-- このファイルをブラウザで直接開いた場合: そのブラウザの localStorage（その端末のみ）
+- このファイルをブラウザで直接開いた場合・Webアプリ版: その端末の localStorage（端末間の移動はバックアップファイルで）
+
+## スマホにアプリとして入れる（Webアプリ版）
+
+`app/` はホーム画面にインストールできる版です（オフラインでも開けます）。
+
+1. GitHub のリポジトリ設定 → **Pages** で、Source を「Deploy from a branch」、Branch をこのブランチ・フォルダを `/ (root)` にして保存
+2. 数分後に `https://<ユーザー名>.github.io/claude-mem/job-search-scheduler/app/` が開けるようになる
+3. スマホでそのURLを開いて、ホーム画面に追加
+   - iPhone（Safari）: 共有ボタン →「ホーム画面に追加」
+   - Android（Chrome）: ︙ →「アプリをインストール」または「ホーム画面に追加」
+
+Webアプリ版のデータはその端末の中だけに保存されます。「バックアップを保存」で書き出したファイルを、別の端末の「バックアップから読み込む」で取り込めます（claude.ai 版から移すときも同じ手順）。
+
+### 更新するとき
+
+`index.html` を編集したら、次のコマンドで `app/index.html` を作り直してコミットします。
+
+```bash
+node job-search-scheduler/build.mjs
+```
