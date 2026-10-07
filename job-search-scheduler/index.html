@@ -560,6 +560,7 @@ button.stat:hover { border-color: var(--accent); }
       <div class="main">
         ${name ? `<span class="co">${esc(name)}</span>` : ''}
         <span class="ttl">${esc(ev.title)}</span>
+        ${ev.source && ev.source.auto ? '<span class="meta" style="color:var(--accent)">メールから自動で追加</span>' : ''}
         ${ev.place ? `<span class="meta">${linkify(ev.place)}</span>` : ''}
         ${ev.memo ? `<span class="meta">${esc(ev.memo)}</span>` : ''}
       </div>
