@@ -1,0 +1,4 @@
+# Blender の中間生成物（tools/README.md 参照）
+assets/build/
+__pycache__/
+.venv/

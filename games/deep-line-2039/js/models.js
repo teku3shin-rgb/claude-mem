@@ -40,7 +40,12 @@
   const C = DL.cmat;
 
   // ================= 人物 =================
+  const useAssets = () => DL.ASSET && DL.ASSET.ready && DL.gfx;
   function humanoid(o = {}) {
+    if (useAssets()) {
+      const r = DL.gfx.humanoid(o);
+      if (r) return r;
+    }
     const root = new T.Group();
     const skin = C(o.skin || 0xb58b6e, 0.8);
     const cloth = C(o.cloth || 0x3f3d35, 0.95);
@@ -236,6 +241,10 @@
   }
   function mutant(kind) {
     const K = MUT_LOOK[kind] || MUT_LOOK.mukuro;
+    if (useAssets()) {
+      const r = DL.gfx.mutant(kind, K.s);
+      if (r) return r;
+    }
     const sk = skinMat(kind);
     const dark = C(0x241a18, 0.6);
     const teeth = C(0xd8d0b0, 0.4);
@@ -315,6 +324,10 @@
 
   // ================= 一人称の武器 =================
   function viewWeapon(kind) {
+    if (useAssets()) {
+      const r = DL.gfx.weapon(kind);
+      if (r) return r;
+    }
     const g = new T.Group();
     const gun = C(0x2a2b2d, 0.42, 0.75);
     const gun2 = C(0x3d3c39, 0.5, 0.6);
@@ -435,6 +448,13 @@
   const P = {};
   P.crate = (o = {}) => {
     const w = o.w || 1, h = o.h || 1, d = o.d || 1;
+    const am = useAssets() && DL.gfx.prop('crate');
+    if (am) {
+      am.scale.set(w, h, d);
+      const g = new T.Group();
+      g.add(am);
+      return { obj: g, cols: [[-w / 2, 0, -d / 2, w / 2, h, d / 2]] };
+    }
     const tx = DL.tex('crate');
     const m = new T.Mesh(GEO.box, new T.MeshStandardMaterial({ map: tx, bumpMap: tx, bumpScale: 0.03, roughness: 0.85 }));
     m.scale.set(w, h, d);
@@ -469,10 +489,16 @@
   P.barrel = (o = {}) => {
     const g = new T.Group();
     const col = o.color || DL.pick([0x5a3a28, 0x3a4a3a, 0x2f3a4a, 0x6a2a1e]);
-    const m = C(col, 0.6, 0.5);
-    cyl(0.3, 0.9, m, 0, 0.45, 0, g);
-    cyl(0.31, 0.04, C(0x222222, 0.6, 0.6), 0, 0.2, 0, g);
-    cyl(0.31, 0.04, C(0x222222, 0.6, 0.6), 0, 0.7, 0, g);
+    const am = useAssets() && DL.gfx.prop('barrel', { color: col });
+    if (am) {
+      am.rotation.y = Math.random() * 6.28;
+      g.add(am);
+    } else {
+      const m = C(col, 0.6, 0.5);
+      cyl(0.3, 0.9, m, 0, 0.45, 0, g);
+      cyl(0.31, 0.04, C(0x222222, 0.6, 0.6), 0, 0.2, 0, g);
+      cyl(0.31, 0.04, C(0x222222, 0.6, 0.6), 0, 0.7, 0, g);
+    }
     if (o.fire) {
       cyl(0.27, 0.02, C(0x111111, 1), 0, 0.88, 0, g);
     }
@@ -488,8 +514,16 @@
       for (let i = 0; i < n; i++) {
         const x = -len / 2 + (i + 0.5 + (row % 2) * 0.5) * (len / n);
         if (x > len / 2) continue;
-        const s = sph(0.58, 0.24, 0.36, m, x, 0.12 + row * 0.21, (r() - 0.5) * 0.05, g);
-        s.rotation.y = (r() - 0.5) * 0.2;
+        const bag = useAssets() && DL.gfx.prop('sandbag');
+        if (bag) {
+          bag.position.set(x, row * 0.19, (r() - 0.5) * 0.05);
+          bag.rotation.y = (r() - 0.5) * 0.25;
+          bag.rotation.z = (r() - 0.5) * 0.06;
+          g.add(bag);
+        } else {
+          const s = sph(0.58, 0.24, 0.36, m, x, 0.12 + row * 0.21, (r() - 0.5) * 0.05, g);
+          s.rotation.y = (r() - 0.5) * 0.2;
+        }
       }
     }
     return { obj: g, cols: [[-len / 2, 0, -0.2, len / 2, rows * 0.21 + 0.05, 0.2]] };
@@ -663,6 +697,15 @@
     return { obj: g, cols: [[-0.55, 0, -0.55, 0.55, 0.3, 0.55]] };
   };
   P.trainCar = (o = {}) => {
+    const prim = trainCarPrim(o);
+    const am = useAssets() && DL.gfx.prop('trainCar', { color: o.color || 0x5a6058, stripe: o.stripe || 0x9a7a30 });
+    if (!am) return prim;
+    am.scale.z = (o.len || 18) / 18;
+    const g = new T.Group();
+    g.add(am);
+    return { obj: g, cols: prim.cols };
+  };
+  const trainCarPrim = (o = {}) => {
     const g = new T.Group();
     const L = o.len || 18, W = 2.8, H = 3.4, F = 1.0;
     const body = C(o.color || 0x5a6058, 0.55, 0.45);
@@ -720,6 +763,14 @@
     return { obj: g, cols };
   };
   P.car = (o = {}) => {
+    const prim = carPrim(o);
+    const am = useAssets() && DL.gfx.prop('car', { color: o.color || DL.pick([0x4a4e52, 0x5a3a2a, 0x2a3a4a, 0x6a6a5a, 0x3a3a30]) });
+    if (!am) return prim;
+    const g = new T.Group();
+    g.add(am);
+    return { obj: g, cols: prim.cols };
+  };
+  const carPrim = (o = {}) => {
     const g = new T.Group();
     const col = o.color || DL.pick([0x4a4e52, 0x5a3a2a, 0x2a3a4a, 0x6a6a5a, 0x3a3a30]);
     const m = C(col, 0.7, 0.4);
@@ -763,8 +814,16 @@
       const x = (r() - 0.5) * w, z = (r() - 0.5) * d;
       const k = 1 - (Math.abs(x) / w + Math.abs(z) / d);
       const s = 0.3 + r() * 0.8;
-      const rock = mesh(GEO.ico, ms[i % 3], s * (1 + r()), s * 0.7, s, x, Math.max(0, k) * h * 0.8 + s * 0.2, z, g);
-      rock.rotation.set(r() * 3, r() * 3, r() * 3);
+      const am = useAssets() && DL.gfx.rock(i);
+      if (am) {
+        am.scale.set(s * (1 + r()), s * 0.7, s);
+        am.position.set(x, Math.max(0, k) * h * 0.8 + s * 0.15, z);
+        am.rotation.set((r() - 0.5) * 0.6, r() * 6, (r() - 0.5) * 0.6);
+        g.add(am);
+      } else {
+        const rock = mesh(GEO.ico, ms[i % 3], s * (1 + r()), s * 0.7, s, x, Math.max(0, k) * h * 0.8 + s * 0.2, z, g);
+        rock.rotation.set(r() * 3, r() * 3, r() * 3);
+      }
     }
     for (let i = 0; i < (o.rebar ? 6 : 0); i++) {
       const b = cyl(0.02, 1.5, C(0x5a3a22, 0.8, 0.5), (r() - 0.5) * w * 0.7, h * 0.6, (r() - 0.5) * d * 0.7, g, true);

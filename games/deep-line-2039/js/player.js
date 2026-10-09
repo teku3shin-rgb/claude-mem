@@ -123,6 +123,15 @@
       S.add(this.vmMuzzleL);
       this.vmRoot = new T.Group();
       S.add(this.vmRoot);
+      this.buildViewModels();
+    }
+    // アセット読み込み後にも呼び直して、Blender 製の武器に差し替える
+    buildViewModels() {
+      const S = this.G.vmScene;
+      if (this.models) {
+        for (const k in this.models) this.vmRoot.remove(this.models[k].group);
+        S.remove(this.knife.group, this.charger.group, this.bombVm.group);
+      }
       this.models = {};
       for (const k of ['revolver', 'smg', 'shotgun']) {
         const w = DL.Models.viewWeapon(k);
@@ -746,10 +755,10 @@
         bm.rotation.set(-t * 1.2, 0, 0.3);
       }
       // 一人称モデルの明るさを周囲に合わせる
-      const amb = 0.08 + this.lit * 0.8;
+      const amb = 0.05 + this.lit * 0.42;
       this.vmAmb.intensity = DL.damp(this.vmAmb.intensity, amb, 4, dt);
-      this.vmKey.intensity = DL.damp(this.vmKey.intensity, 0.05 + this.lit * 0.5 + (G.env && G.env.outdoor ? 0.4 : 0), 4, dt);
-      this.vmFlash.intensity = this.flash.on ? 0.45 * this.flashPower() : 0;
+      this.vmKey.intensity = DL.damp(this.vmKey.intensity, 0.04 + this.lit * 0.3 + (G.env && G.env.outdoor ? 0.25 : 0), 4, dt);
+      this.vmFlash.intensity = this.flash.on ? 0.3 * this.flashPower() : 0;
       this.vmMuzzleL.position.copy(m.parts.muzzle).applyMatrix4(g.matrix);
       void hs;
     }

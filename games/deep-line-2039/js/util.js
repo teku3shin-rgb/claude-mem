@@ -403,6 +403,11 @@
   DL.getMaterials = function () {
     if (matCache) return matCache;
     matCache = DL.MATS.map((name) => {
+      const baked = DL.worldMaterial && DL.worldMaterial(name);
+      if (baked) {
+        baked.userData.s = MAT_DEF[name].s;
+        return baked;
+      }
       const d = MAT_DEF[name];
       const tex = toTex(d.tex());
       const m = new T.MeshStandardMaterial({ map: tex, bumpMap: tex, bumpScale: d.bump, roughness: d.rough, metalness: d.metal || 0 });

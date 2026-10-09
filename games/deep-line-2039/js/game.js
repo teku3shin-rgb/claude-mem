@@ -916,7 +916,7 @@
   const shared = new Set();
   DL.isSharedGeo = (g) => {
     if (!shared.size) for (const k in DL.GEO) shared.add(DL.GEO[k]);
-    return shared.has(g);
+    return shared.has(g) || !!(g.userData && g.userData.shared);
   };
 
   // ================= 起動 =================
@@ -932,7 +932,14 @@
     }
     const params = new URLSearchParams(location.search);
     if (params.has('debug')) G.debug = true;
-    const ready = () => {
+    const ready = async () => {
+      $('loading').textContent = 'LOADING ASSETS';
+      try {
+        await DL.loadAssets(G.renderer);
+      } catch (e) {
+        console.warn('assets', e);
+      }
+      G.player.buildViewModels();
       // テクスチャを先に生成しておく
       DL.getMaterials();
       G.ready = true;
