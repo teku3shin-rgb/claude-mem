@@ -37,6 +37,14 @@ three.js は MIT License、FXAA は NVIDIA の BSD License）。
 
 `desktop/` は [Electron](https://www.electronjs.org/) でゲームを包んだもの。ブラウザの枠なしの全画面で、GPU を確実に使って動く。
 
+**ダウンロード（Windows）**: `games/deep-line-2039/` を変更して push するたびに、GitHub Actions（`.github/workflows/deep-line-desktop.yml`）が
+Windows 版を作って GitHub Releases に置く。最新版はリポジトリの Releases ページ、または
+`https://github.com/<owner>/<repo>/releases/latest/download/DEEP-LINE-2039-windows-x64.zip` から直接ダウンロードできる。
+展開して `DEEP LINE 2039.exe` を起動する（署名していないので、初回は SmartScreen の「詳細情報」→「実行」）。
+フォークしたリポジトリでは Actions が最初は無効なので、Actions タブで有効にしてから push する。
+
+自分でビルドする場合:
+
 ```bash
 cd games/deep-line-2039/desktop
 npm install

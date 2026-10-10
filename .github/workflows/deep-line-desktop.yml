@@ -1,0 +1,60 @@
+# DEEP LINE 2039 のデスクトップ版（Windows）を作って GitHub Releases に置く。
+# games/deep-line-2039/ を変更して push するたびに新しいリリースができ、
+# 最新版は常に次の URL から直接ダウンロードできる:
+#   https://github.com/<owner>/<repo>/releases/latest/download/DEEP-LINE-2039-windows-x64.zip
+# タグは v で始めない（npm-publish.yml の v* タグと混ざらないように）。
+name: DEEP LINE 2039 desktop build
+
+on:
+  push:
+    paths:
+      - 'games/deep-line-2039/**'
+      - '.github/workflows/deep-line-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deep-line-desktop
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: games/deep-line-2039/desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Electron and the packager
+        run: npm install --no-audit --no-fund
+
+      - name: Package for Windows x64
+        run: |
+          node pack.js win32 x64
+          mv "dist/DEEP LINE 2039-win32-x64" "dist/DEEP-LINE-2039"
+          cd dist
+          zip -qr -9 ../DEEP-LINE-2039-windows-x64.zip DEEP-LINE-2039
+          ls -la ..
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: deep-line-2039-build-${{ github.run_number }}
+          name: DEEP LINE 2039 デスクトップ版 (build ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: games/deep-line-2039/desktop/DEEP-LINE-2039-windows-x64.zip
+          body: |
+            Windows 用のデスクトップ版です（ブランチ `${{ github.ref_name }}` / コミット ${{ github.sha }}）。
+
+            1. `DEEP-LINE-2039-windows-x64.zip` をダウンロードして展開する
+            2. `DEEP-LINE-2039` フォルダの中の `DEEP LINE 2039.exe` を起動する（全画面。F11 で切り替え）
+
+            署名していないので、初回は Windows の SmartScreen が出る。「詳細情報」→「実行」で起動できる。
