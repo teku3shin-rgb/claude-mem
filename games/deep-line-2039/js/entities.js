@@ -989,6 +989,8 @@
         const d = Math.hypot(ddx, ddy, ddz);
         const r = G.world.raycast(mx, my, mzz, ddx / d, ddy / d, ddz / d, d + 20);
         G.fx.tracer(mx, my, mzz, r.x, r.y, r.z);
+        // 弾が耳元をかすめた（着弾点がプレイヤーより奥）
+        if (r.t > d - 1.5 && G.audio.whiz) G.audio.whiz({ x: tx, y: ty, z: tz });
         if (r.hit) {
           G.fx.sparks(r.x, r.y, r.z, r.nx, r.ny, r.nz, 4);
           if (r.t < 25) G.audio.impact(tmpV.set(r.x, r.y, r.z), 'wall');
