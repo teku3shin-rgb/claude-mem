@@ -287,7 +287,8 @@
     }
     ghost(o) {
       const g = this.G.addEntity(new DL.Human(this.G, Object.assign({ role: 'ghost', look: o.look || {} }, o)));
-      if (o.scale) g.mesh.scale.setScalar(o.scale);
+      // 子どもの影: Blender の子どもの模型があればそれを等倍で使う
+      if (o.scale) g.mesh.scale.setScalar(g.model && g.model.skinned && o.look && o.look.model === 'yuki' ? 1 : o.scale);
       return g;
     }
     mutant(kind, x, z, o = {}) {
@@ -367,22 +368,26 @@
   const pick = DL.pick;
   const LOOK = {
     haru: { cloth: 0x3a3d34, pants: 0x2a2a26 },
-    kuroda: { gun: true, cloth: 0x3a3b30, pants: 0x2a2a24, coat: true, vest: 0x4a4636, pack: true, beard: 0x2a2620, hat: 'beanie', hatColor: 0x26261f, gloves: true, scarf: 0x5a3a2a },
-    minami: { cloth: 0x4a3a40, pants: 0x3a3030, coat: true, hair: 0xb8b0a8, skin: 0xb89a80, scarf: 0x6a5a3a },
-    shino: { cloth: 0x3a4a52, pants: 0x2a2e30, hair: 0x1a1612, skin: 0xc0987a },
-    goro: { cloth: 0x5a4a32, pants: 0x3a3226, vest: 0x6a5a3a, beard: 0x3a3028, hat: 'cap', hatColor: 0x3a3a30 },
-    sota: { cloth: 0x5a3a2a, pants: 0x2a2a30, hair: 0x2a2018, guitar: true },
-    yuki: { cloth: 0x8a5a4a, pants: 0x3a3a46, hair: 0x1a1410, skin: 0xc8a080 },
-    guard: { cloth: 0x3c4232, pants: 0x2c3026, vest: 0x4a5038, hat: 'helmet', hatColor: 0x3a4030, gloves: true, gun: true },
-    traveler: { cloth: 0x4a4a3a, pants: 0x3a362e, pack: true, hat: 'hood', beard: 0x3a3228 },
-    nagata: { cloth: 0x2a3440, pants: 0x232a30, vest: 0x3a4450, hat: 'cap', hatColor: 0x222a34, gloves: true, gun: true },
-    sakaki: { cloth: 0x2a2a2e, pants: 0x222226, coat: true, hair: 0x9a9a9a, skin: 0xb89880, scarf: 0x6a1c18 },
-    yamada: { cloth: 0x5a5040, pants: 0x3a3428, hat: 'cap', hatColor: 0x4a3a2a, beard: 0x2a2420 },
-    scout: { cloth: 0x3a3c32, pants: 0x2a2a24, vest: 0x4a4838, hat: 'beanie', mask: true, pack: true, gloves: true, gun: true },
+    kuroda: { model: 'kuroda', gun: true, cloth: 0x3a3b30, pants: 0x2a2a24, coat: true, vest: 0x4a4636, pack: true, beard: 0x2a2620, hat: 'beanie', hatColor: 0x26261f, gloves: true, scarf: 0x5a3a2a },
+    minami: { model: 'minami', cloth: 0x4a3a40, pants: 0x3a3030, coat: true, hair: 0xb8b0a8, skin: 0xb89a80, scarf: 0x6a5a3a },
+    shino: { model: 'shino', cloth: 0x3a4a52, pants: 0x2a2e30, hair: 0x1a1612, skin: 0xc0987a },
+    goro: { model: 'goro', cloth: 0x5a4a32, pants: 0x3a3226, vest: 0x6a5a3a, beard: 0x3a3028, hat: 'cap', hatColor: 0x3a3a30 },
+    sota: { model: 'sota', cloth: 0x5a3a2a, pants: 0x2a2a30, hair: 0x2a2018, guitar: true },
+    yuki: { model: 'yuki', cloth: 0x8a5a4a, pants: 0x3a3a46, hair: 0x1a1410, skin: 0xc8a080 },
+    guard: { model: 'guard', cloth: 0x3c4232, pants: 0x2c3026, vest: 0x4a5038, hat: 'helmet', hatColor: 0x3a4030, gloves: true, gun: true },
+    traveler: { model: 'traveler', cloth: 0x4a4a3a, pants: 0x3a362e, pack: true, hat: 'hood', beard: 0x3a3228 },
+    nagata: { model: 'nagata', cloth: 0x2a3440, pants: 0x232a30, vest: 0x3a4450, hat: 'cap', hatColor: 0x222a34, gloves: true, gun: true },
+    sakaki: { model: 'sakaki', cloth: 0x2a2a2e, pants: 0x222226, coat: true, hair: 0x9a9a9a, skin: 0xb89880, scarf: 0x6a1c18 },
+    yamada: { model: 'yamada', cloth: 0x5a5040, pants: 0x3a3428, hat: 'cap', hatColor: 0x4a3a2a, beard: 0x2a2420 },
+    scout: { model: 'scout', cloth: 0x3a3c32, pants: 0x2a2a24, vest: 0x4a4838, hat: 'beanie', mask: true, pack: true, gloves: true, gun: true },
   };
-  const citizen = () => ({ cloth: pick([0x4a4036, 0x3a4048, 0x5a4a3a, 0x40382e, 0x4a3a3a, 0x384034]), pants: pick([0x2a2a26, 0x33302a, 0x2a2e32]), hair: pick([0x1a1612, 0x3a3028, 0x8a8478, undefined]), coat: Math.random() < 0.4, hat: pick([undefined, 'beanie', undefined, 'hood']), scarf: pick([undefined, 0x5a3a2a, 0x3a4a5a]) });
-  const bandit = () => ({ cloth: pick([0x4a2a24, 0x3a2a2a, 0x2e2a28]), pants: 0x2a2624, vest: pick([0x5a2a20, 0x6a2a1e, 0x3a3a30]), hat: pick(['hood', 'beanie', undefined]), scarf: 0x9a2a1e, mask: Math.random() < 0.45, gloves: true });
-  const ghostLook = () => ({ coat: Math.random() < 0.5, hat: pick([undefined, 'cap', undefined]), pack: Math.random() < 0.3 });
+  // model: Blender で作った人物（tools/build_humans.py）。無い環境では残りの値で旧来の模型を組む
+  const citizen = () => ({ model: pick(['citizen1', 'citizen2', 'citizen3', 'citizen4']), cloth: pick([0x4a4036, 0x3a4048, 0x5a4a3a, 0x40382e, 0x4a3a3a, 0x384034]), pants: pick([0x2a2a26, 0x33302a, 0x2a2e32]), hair: pick([0x1a1612, 0x3a3028, 0x8a8478, undefined]), coat: Math.random() < 0.4, hat: pick([undefined, 'beanie', undefined, 'hood']), scarf: pick([undefined, 0x5a3a2a, 0x3a4a5a]) });
+  const bandit = () => {
+    const mask = Math.random() < 0.45;
+    return { model: mask ? 'bandit1' : pick(['bandit2', 'bandit3']), cloth: pick([0x4a2a24, 0x3a2a2a, 0x2e2a28]), pants: 0x2a2624, vest: pick([0x5a2a20, 0x6a2a1e, 0x3a3a30]), hat: pick(['hood', 'beanie', undefined]), scarf: 0x9a2a1e, mask, gloves: true };
+  };
+  const ghostLook = () => ({ model: pick(['citizen1', 'citizen3', 'citizen4']), coat: Math.random() < 0.5, hat: pick([undefined, 'cap', undefined]), pack: Math.random() < 0.3 });
 
   function kit(o = {}) {
     const inv = o.inv || {};
@@ -849,7 +854,7 @@
           const ghosts = [];
           const spots = [[35, 106, 'stand'], [37.2, 108, 'floor'], [34.8, 111, 'stand'], [36.4, 113, 'stand'], [37.3, 116, 'floor'], [35.5, 118, 'stand'], [36.6, 120, 'stand']];
           for (const [x, z, pose] of spots) ghosts.push(L.ghost({ x, z, yaw: Y.S, pose, look: ghostLook() }));
-          ghosts.push(L.ghost({ x: 36.1, z: 109.5, yaw: Y.S, scale: 0.62, look: { hair: 0x222222 } }));
+          ghosts.push(L.ghost({ x: 36.1, z: 109.5, yaw: Y.S, scale: 0.62, look: { model: 'yuki', hair: 0x222222 } }));
           await L.wait(2.4);
           await L.say('？？？', '…まだ、動かないの?', 2.2);
           await L.say('？？？', '…電気、つかないね。', 2.2);
@@ -1323,7 +1328,7 @@
         E({ x: 26.6, z: 69, y: 1, yaw: DL.yawTo(1, 1) }),
         E({ x: 47, z: 67.6, y: 0, pose: 'sitdesk', yaw: Y.S, name: '赤環の頭目', hp: 160, look: Object.assign(bandit(), { coat: true, mask: false, beard: 0x1a1612 }) }),
       ];
-      L.f.exitGuard = E({ x: 16, z: 84, y: 0, yaw: Y.S, canSurrender: true, name: '若い赤環の兵', look: Object.assign(bandit(), { mask: false, hair: 0x1a1612 }), pitch: 1.2 });
+      L.f.exitGuard = E({ x: 16, z: 84, y: 0, yaw: Y.S, canSurrender: true, name: '若い赤環の兵', look: Object.assign(bandit(), { model: 'bandit3', mask: false, hair: 0x1a1612 }), pitch: 1.2 });
     },
     stages: [
       {

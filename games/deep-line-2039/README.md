@@ -3,9 +3,15 @@
 メトロシリーズ（Metro 2033 / Last Light / Exodus）にインスパイアされた、ブラウザで遊べる一人称3Dサバイバルシューター。
 核戦争後の東京の地下鉄を舞台に、全6章・エンディング3種の物語を収録している。
 
-シナリオ、マップ、モデル、テクスチャ、サウンドをすべてコードで生成している。人物・変異体・武器・小道具の 3D モデルと PBR テクスチャは
-Blender をスクリプトで動かして作り、`js/assets.js` に埋め込んである（[tools/README.md](tools/README.md)）。音はすべて WebAudio で合成していて、音声ファイルは無い。
-外部ライブラリは three.js（r128）と、その GLTFLoader だけ（どちらも `vendor/` に同梱）。
+シナリオ、マップ、モデル、テクスチャ、サウンドをすべてコードで生成している。3D モデルと PBR テクスチャは Blender をスクリプトで動かして作り、
+`js/assets*.js` に埋め込んである（[tools/README.md](tools/README.md)）。
+
+- **人物**: [MakeHuman](http://www.makehumancommunity.org/) の CC0 の人体データ（体型・リグ・ウェイト）から 19 人を作り、服・髪・ひげ・装備を足して
+  一人ずつテクスチャを焼いた、スキニング済みのフル 3D モデル。
+- **変異体**: ムクロ・ヌシ・ハハ・ハグレは独自のデザイン（[SCENARIO.md](SCENARIO.md) の「変異体」）。彫り込んだハイポリから法線マップを焼いている。
+
+音はすべて WebAudio で合成していて、音声ファイルは無い。
+外部ライブラリは three.js（r128）と GLTFLoader・SkeletonUtils、meshoptimizer のデコーダーだけ（どれも `vendor/` に同梱、MIT License）。
 
 物語と登場人物は [SCENARIO.md](SCENARIO.md) を参照。
 
@@ -59,8 +65,10 @@ js/util.js       数学ユーティリティ、手続き型テクスチャ、保
 js/audio.js      WebAudio による効果音・環境音・ギター（カープラス・ストロング）
 js/world.js      グリッドベースのワールド生成、衝突判定、レイキャスト、経路探索、照明プール
 js/models.js     人物・変異体・武器・小道具（Blender 製アセットが無いときはプリミティブで組む）
-js/gfx.js        Blender 製アセットの読み込みと、ゲーム用のマテリアル・リグへの組み立て
-js/assets.js     Blender で生成したモデル（glb）とテクスチャ（自動生成、tools/pack_assets.py）
+js/gfx.js        Blender 製アセットの読み込みと、ゲーム用のマテリアル・リグ（スキニング）への組み立て
+js/assets.js     Blender で生成した武器・小道具のモデルと壁や床のテクスチャ（自動生成、tools/pack_assets.py）
+js/assets-chars.js    人物 19 人のモデルとテクスチャ（自動生成）
+js/assets-mutants.js  変異体 4 種のモデルとテクスチャ（自動生成）
 js/entities.js   変異体AI、人間AI（味方・敵・ステルス・降伏）、拾得物、爆弾、エフェクト
 js/player.js     移動、武器、ガスマスク、ライト、一人称モデル
 js/ui.js         HUD、字幕、選択肢、商店、手帳、章カード
@@ -68,6 +76,8 @@ js/levels.js     全6章の地形・登場人物・台詞・イベント、エ�
 js/game.js       メインループ、入力、章の読み込み、チェックポイント、メニュー
 vendor/three.min.js  three.js r128（MIT License）
 vendor/GLTFLoader.js three.js r128 の GLTFLoader（MIT License）
+vendor/SkeletonUtils.js  three.js r128 の SkeletonUtils（MIT License）
+vendor/meshopt_decoder*.js  meshoptimizer のデコーダー（MIT License）
 tools/           Blender（bpy）でモデルとテクスチャを生成するスクリプト
 ```
 

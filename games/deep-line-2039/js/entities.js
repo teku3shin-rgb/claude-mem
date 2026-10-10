@@ -449,6 +449,8 @@
       m.body.position.y = m.bodyY + Math.abs(Math.cos(this.gait)) * 0.05 * amp + wind * 0.15;
       m.jaw.rotation.x = DL.damp(m.jaw.rotation.x, wind || this.state === 'charge' || this.state === 'leap' ? 0.7 : 0.12 + Math.sin(this.gait * 0.5) * 0.06, 12, dt);
       m.head.rotation.y = this.state === 'idle' ? Math.sin(this.gait * 0.3) * 0.4 : 0;
+      // 尾を左右に振る（Blender 製のモデルのみ）
+      if (m.tail) m.tail.forEach((t, i) => { t.rotation.y = Math.sin(this.gait * 0.5 - i * 0.8) * (0.25 + amp * 0.3); });
     }
     sync() {
       this.mesh.position.copy(this.pos);
@@ -670,6 +672,15 @@
         const k = Math.min(1, this.deadT / 0.5);
         m.root.rotation.x = DL.smooth(k) * (Math.PI / 2 - 0.05);
         m.root.position.y = this.pos.y + 0.12 * k;
+        // 倒れながら手足の力が抜ける
+        const s = DL.smooth(k);
+        m.legL.hip.rotation.x = 0.35 * s;
+        m.legL.kn.rotation.x = -0.6 * s;
+        m.legR.kn.rotation.x = -0.25 * s;
+        m.armL.sh.rotation.set(0.2 * s, 0, -0.9 * s);
+        m.armR.sh.rotation.set(0.4 * s, 0, 0.7 * s);
+        m.armL.el.rotation.x = 0.5 * s;
+        m.head.rotation.x = -0.35 * s;
         return;
       }
       if (this.role === 'ghost') {
