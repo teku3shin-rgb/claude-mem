@@ -1395,6 +1395,7 @@
       const sc = 0.4 + Math.random() * 0.3;
       s.scale.set(sc, sc, sc);
       s.material.rotation = Math.random() * 6;
+      s.material.color.setHex(0xffd8a0).multiplyScalar(this.G.post && this.G.post.on ? 4 : 1);
       this.flashLamp(x, y, z, 0xffb060, 2.2, 9, 0.06);
     }
     flashLamp(x, y, z, color, intensity, range, dur) {

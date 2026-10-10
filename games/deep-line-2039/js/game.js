@@ -50,14 +50,20 @@
     }
   }
 
-  const DEFAULT_SETTINGS = { sens: 1, vol: 0.8, fov: 75, diff: 1, shadows: true, invert: false };
+  const DEFAULT_SETTINGS = { sens: 1, vol: 0.8, fov: 75, diff: 1, shadows: true, invert: false, gfx: 'high' };
 
   // ================= ゲーム =================
   class Game {
     constructor() {
       DL.game = this;
       this.canvas = $('gl');
-      const R = (this.renderer = new T.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' }));
+      this.settings = Object.assign({}, DEFAULT_SETTINGS, DL.store.get('settings', {}));
+      // ?gfx=low|medium|high|ultra で画質を一時的に上書き（保存しない）
+      const gq = new URLSearchParams(location.search).get('gfx');
+      this.gfxOverride = gq && (gq === 'low' || DL.Post.PRESETS[gq]) ? gq : null;
+      // 後処理を使うときはキャンバスのマルチサンプルは無駄なので切る（FXAA で処理する）
+      const aa = (this.gfxOverride || this.settings.gfx) === 'low';
+      const R = (this.renderer = new T.WebGLRenderer({ canvas: this.canvas, antialias: aa, powerPreference: 'high-performance' }));
       R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       R.setSize(window.innerWidth, window.innerHeight, false);
       R.outputEncoding = T.sRGBEncoding;
@@ -85,7 +91,9 @@
       this.input = new Input();
       this.audio = new DL.AudioEngine();
       this.ui = new DL.UI(this);
-      this.settings = Object.assign({}, DEFAULT_SETTINGS, DL.store.get('settings', {}));
+      this.post = new DL.Post(this);
+      this.bulbBoost = 1;
+      this.glowMul = 1;
       this.settings.diffMul = +this.settings.diff;
       this.applySettings();
       this.time = 0;
@@ -126,7 +134,38 @@
       s.diffMul = +s.diff;
       this.audio.setVolume(s.vol);
       this.flashlight.castShadow = !!s.shadows;
-      DL.store.set('settings', { sens: s.sens, vol: s.vol, fov: s.fov, diff: s.diff, shadows: s.shadows, invert: s.invert });
+      this.applyGfx();
+      DL.store.set('settings', { sens: s.sens, vol: s.vol, fov: s.fov, diff: s.diff, shadows: s.shadows, invert: s.invert, gfx: s.gfx });
+    }
+    // 画質プリセット（低 = 従来の直接描画、中以上 = js/post.js の HDR パイプライン）
+    applyGfx() {
+      const name = this.gfxOverride || this.settings.gfx || 'high';
+      if (this.gfxName === name) return;
+      this.gfxName = name;
+      const on = this.post.setPreset(name);
+      const P = on ? DL.Post.PRESETS[this.post.name] : null;
+      const R = this.renderer;
+      R.toneMapping = on ? T.NoToneMapping : T.ACESFilmicToneMapping;
+      R.setPixelRatio(Math.min(window.devicePixelRatio || 1, P ? P.dpr : 1.5));
+      R.setSize(window.innerWidth, window.innerHeight, false);
+      const sz = P ? P.shadow : 1024, sh = this.flashlight.shadow;
+      if (sh.mapSize.x !== sz) {
+        sh.mapSize.set(sz, sz);
+        if (sh.map) {
+          sh.map.dispose();
+          sh.map = null;
+        }
+      }
+      // HDR のときは電球を本当に明るくしてブルームを出し、疑似的な光暈スプライトは控えめに
+      this.bulbBoost = on ? 7 : 1;
+      this.glowMul = on ? 0.45 : 1;
+      document.body.classList.toggle('post', on);
+      // トーンマップの有無はシェーダーに焼き込まれるので作り直す
+      for (const sc of [this.scene, this.vmScene]) {
+        if (sc) sc.traverse((o) => {
+          if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true));
+        });
+      }
     }
 
     // ---------- イベント ----------
@@ -291,6 +330,11 @@
         this.settings.invert = e.target.checked;
         this.applySettings();
       });
+      $('set-gfx').addEventListener('change', (e) => {
+        this.settings.gfx = e.target.value;
+        this.gfxOverride = null;
+        this.applySettings();
+      });
       if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches) $('touchwarn').hidden = false;
     }
     openSettings() {
@@ -304,6 +348,7 @@
       $('set-diff').value = String(s.diff);
       $('set-shadow').checked = !!s.shadows;
       $('set-invert').checked = !!s.invert;
+      $('set-gfx').value = this.gfxName || s.gfx;
       this.showScreen('settings');
     }
     renderChapters() {
@@ -579,6 +624,7 @@
       this.hemi.intensity = env.hemi !== undefined ? env.hemi : 0.08;
       this.sun.intensity = env.sun || 0;
       this.renderer.toneMappingExposure = env.exposure || 1.15;
+      this.post.setEnv(env);
       this.audio.setAmbience(env.amb || 'tunnel');
       this.audio.setReverb(env.reverb !== undefined ? env.reverb : 0.6);
       this.fx.setMotes(!env.outdoor);
@@ -695,8 +741,8 @@
         }
         f *= L.dim !== undefined ? L.dim : 1;
         L._f = f;
-        if (L.bulb && L.bulbColor) L.bulb.material.color.copy(L.bulbColor).multiplyScalar(0.12 + 0.88 * Math.min(1, f));
-        if (L.glow) L.glow.material.opacity = 0.55 * Math.min(1, f) * (L.glowA || 1);
+        if (L.bulb && L.bulbColor) L.bulb.material.color.copy(L.bulbColor).multiplyScalar((0.12 + 0.88 * Math.min(1, f)) * this.bulbBoost);
+        if (L.glow) L.glow.material.opacity = 0.55 * Math.min(1, f) * (L.glowA || 1) * this.glowMul;
       }
     }
     computeLit() {
@@ -903,9 +949,15 @@
     }
     render() {
       const R = this.renderer;
+      const vm = this.state === 'play' || this.state === 'dying' || this.state === 'pause';
+      if (this.post.on) {
+        this.post.render(this, vm);
+        return;
+      }
+      R.setRenderTarget(null);
       R.clear();
       R.render(this.scene, this.camera);
-      if (this.state === 'play' || this.state === 'dying' || this.state === 'pause') {
+      if (vm) {
         R.clearDepth();
         R.render(this.vmScene, this.vmCam);
       }

@@ -1,0 +1,19 @@
+{
+  "name": "deep-line-2039",
+  "productName": "DEEP LINE 2039",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DEEP LINE 2039 desktop build (Electron wrapper)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "windowed": "electron . --windowed",
+    "pack:win": "node pack.js win32 x64",
+    "pack:mac": "node pack.js darwin arm64",
+    "pack:linux": "node pack.js linux x64"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "@electron/packager": "18.3.6"
+  }
+}

@@ -184,6 +184,7 @@
       this.grainT = 0;
     }
     drawGrain() {
+      if (this.G.post && this.G.post.on) return;
       this.grainT++;
       if (this.grainT % 2) return;
       const d = this.grainImg.data;

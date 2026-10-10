@@ -266,6 +266,8 @@
           }
         }
       }
+      // 壁際の細部（js/dress.js）
+      if (DL.dressWorld) DL.dressWorld(this);
       this.computeCBlock();
     }
 

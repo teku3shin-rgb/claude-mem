@@ -600,6 +600,12 @@
       const m = this.models[this.cur];
       m.flash.visible = true;
       m.flash.material.rotation = Math.random() * 6;
+      // HDR のときは閃光を明るくしてブルームで滲ませる
+      m.flash.material.color.setScalar(G.post && G.post.on ? 5 : 1);
+      // 銃口から薄く煙が残る
+      if (Math.random() < (this.cur === 'smg' ? 0.35 : 1)) {
+        G.fx.smoke(o.x + fwd.x * 0.9 + right.x * 0.12, o.y + fwd.y * 0.9 - 0.12, o.z + fwd.z * 0.9 + right.z * 0.12, { life: 1.6, rise: 0.22, grow: 1.8, size: 0.3, color: 0x55524c, a: this.cur === 'shotgun' ? 0.16 : 0.1 });
+      }
       m.flash.scale.setScalar(this.cur === 'shotgun' ? 0.35 : 0.2 + Math.random() * 0.08);
       this.flashT = 0.05;
       this.vmMuzzleL.intensity = 3;
